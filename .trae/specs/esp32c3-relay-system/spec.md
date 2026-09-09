@@ -56,7 +56,7 @@
 #### Scenario: 双串口角色由代码配置
 - WHEN 系统启动
 - THEN 系统按 `main.py` 中的常量 `CONTROL_SERIAL`（取值 `'uart0'` 或 `'usb_cdc'`）决定哪个串口承担继电器/WiFi 控制角色
-  - 默认 `CONTROL_SERIAL = 'uart0'`：UART0 (115200) = 控制，USB CDC = REPL
+  - 默认 `CONTROL_SERIAL = 'uart0'`：UART0 (9600) = 控制，USB CDC = REPL
   - 另一个串口承担 REPL
   - 不依赖任何物理开关或外部引脚
 

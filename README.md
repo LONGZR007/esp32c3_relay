@@ -30,7 +30,7 @@
 | 信号 | 引脚 | 说明 |
 |---|---|---|
 | 继电器 CH1 ~ CH8 | GPIO1 ~ GPIO8 | 高电平 = 吸合（状态 1），低电平 = 不吸合（状态 0） |
-| UART0 TX/RX | 默认 GPIO21 / GPIO20（ESP32-C3） | 默认作为**继电器/WiFi 控制串口**，115200 |
+| UART0 TX/RX | 默认 GPIO21 / GPIO20（ESP32-C3） | 默认作为**继电器/WiFi 控制串口**，9600 |
 | USB CDC | 板载 USB 口 | 默认作为 **REPL** |
 
 ## 串口角色配置
@@ -58,7 +58,7 @@ CONTROL_SERIAL = 'uart0'      # 默认：UART0 = 控制串口，USB CDC = REPL
 
 ## 通过串口配置 WiFi
 
-在控制串口（默认 UART0，115200）输入 ASCII 文本（以换行结尾）：
+在控制串口（默认 UART0，9600）输入 ASCII 文本（以换行结尾）：
 
 ```
 wifi:<ssid>,pwd:<password>

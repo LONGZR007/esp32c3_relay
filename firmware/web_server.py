@@ -1,10 +1,11 @@
 # 最小 HTTP 服务模块（原生 socket）
 # 监听 80，提供继电器状态查询与控制 REST API
+# 说明：ESP32-C3 单核上 _thread 中阻塞 accept() 不可靠，
+#       故本模块提供 poll_server()，由主循环用 select 非阻塞轮询。
 
 import socket
 import json
-import time
-import _thread
+import select
 
 from relay import relays
 
@@ -129,32 +130,47 @@ def _handle_request(conn):
             pass
 
 
-def _server_loop():
-    # 后台服务循环，异常打印不退出
-    while True:
+_listen = None
+_listen_err_time = 0
+
+
+def poll_server():
+    # 由主循环周期调用：初始化监听 socket（首次），并处理当前已到达的连接。
+    # select 非阻塞，无连接时立即返回，不会卡住主循环。
+    global _listen, _listen_err_time
+    import time
+    if _listen is None:
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind(('0.0.0.0', 80))
             s.listen(5)
+            _listen = s
             print('[web] server listening on :80')
-            while True:
-                conn = None
-                try:
-                    conn, addr = s.accept()
-                    _handle_request(conn)
-                except Exception as e:
-                    print('[web] accept/handle error:', e)
-                if conn is not None:
-                    try:
-                        conn.close()
-                    except Exception:
-                        pass
         except Exception as e:
-            print('[web] server error:', e)
-            time.sleep(1)
-
-
-def start_server_thread():
-    # 启动 HTTP 后台线程
-    _thread.start_new_thread(_server_loop, ())
+            # 启动失败（如端口占用），限制重试频率避免刷屏
+            now = time.ticks_ms()
+            if now - _listen_err_time > 5000:
+                print('[web] listen error:', e)
+                _listen_err_time = now
+            return
+    try:
+        r, _, _ = select.select([_listen], [], [], 0)
+    except Exception:
+        return
+    if not r:
+        return
+    for _ in range(3):  # 单次最多处理 3 个连接，避免长时间独占主循环
+        try:
+            conn, addr = _listen.accept()
+        except Exception:
+            break
+        try:
+            conn.settimeout(3)
+            _handle_request(conn)
+        except Exception as e:
+            print('[web] handle error:', e)
+        try:
+            conn.close()
+        except Exception:
+            pass

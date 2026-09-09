@@ -23,7 +23,7 @@
 
 - [x] Task 5: 双串口角色由代码常量控制
   - [x] SubTask 5.1: 在 `firmware/main.py` 定义 `CONTROL_SERIAL = 'uart0'`（另一个取值 `'usb_cdc'`）
-  - [x] SubTask 5.2: 根据 `CONTROL_SERIAL` 选择控制串口（uart0 = machine.UART(0,115200)；usb_cdc = sys.stdin/stdout + REPL 转 UART0）
+  - [x] SubTask 5.2: 根据 `CONTROL_SERIAL` 选择控制串口（uart0 = machine.UART(0,9600)；usb_cdc = sys.stdin/stdout + REPL 转 UART0）
   - [x] SubTask 5.3: 主循环从控制串口读取字节喂给 `serial_control.handle_byte`，回包写回；不依赖外部引脚
   - [x] SubTask 5.4: 上电立即进入主循环响应串口，不依赖 WiFi 状态
 

@@ -1,15 +1,20 @@
 # 8 路继电器控制模块
-# GPIO1-8 对应通道 1-8
+# 通道 1-8 -> GPIO0-7
+# （GPIO8 已改作 WiFi 指示灯，见 wifi_manager.py）
 
 import machine
+
+# 通道 -> GPIO 引脚映射
+# PIN_MAP = [0, 1, 2, 3, 4, 5, 6, 7]  # 目标方案（通道1-8 = GPIO0-7）
+PIN_MAP = [1, 2, 3, 4, 5, 6, 7, 9]  # 对比实验：旧映射，验证 wifi 是否受 GPIO0 影响
 
 
 class Relays:
     def __init__(self):
-        # 初始化 GPIO1..8 为输出，默认低电平
+        # 初始化各通道为输出，默认低电平
         self.pins = []
-        for i in range(1, 9):
-            self.pins.append(machine.Pin(i, machine.Pin.OUT, value=0))
+        for pin in PIN_MAP:
+            self.pins.append(machine.Pin(pin, machine.Pin.OUT, value=0))
 
     def set(self, ch, state):
         # ch 范围 1-8，state 非 0/1 抛 ValueError
