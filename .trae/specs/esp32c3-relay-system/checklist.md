@@ -22,13 +22,15 @@
 - [x] `index.html` `<script>` 改为 `GET /api/state` 渲染 + 失败回退（Task 8.2）
 - [x] `index.html` 卡片/全局按钮走 `POST /api/relay` 等接口（Task 8.3）
 - [x] `index.html` 通道数超出 1-8 时按后端 400 忽略（Task 8.4）
-- [x] `mcp_server/serial_client.py` 实现 `set_relay(channel, state, with_reply=False)` 并按 `with_reply` 选 0x02/0x03 或 0x00/0x01（Task 9.2）
-- [x] `mcp_server/serial_client.py` 实现 `get_relay / toggle_relay / set_all_relays / get_all_relays / set_wifi`（Task 9.3）
-- [x] `mcp_server/serial_client.py` 在 ch/state 越界时发送前抛 `ValueError`（Task 9.4）
+- [x] `mcp_server/serial_client.py` 实现 `turn_on_ack(ch)`(0x03)/`turn_off_ack(ch)`(0x02)/`toggle(ch)`(0x04)/`query(ch)`(0x05)，统一 `_ack_op` 返回实测吸合状态 0/1（Task 9.2）
+- [x] `mcp_server/serial_client.py` 实现 `release_serial()` + `set_wifi(ssid, pwd)`（Task 9.3）
+- [x] `mcp_server/serial_client.py` 在 ch 越界时发送前抛 `ValueError`（Task 9.4）
 - [x] `mcp_server/serial_client.py` 实现串口异常捕获 + `reopen()` 重载 port/baudrate 配置后再 open（Task 9.5）
-- [x] `mcp_server/network_client.py` 实现 `set_relay/get_relay/set_all_relays/get_all_relays/toggle_relay/set_wifi`（Task 10.2-10.4）
-- [x] `mcp_server/server.py` 用 `MCPServer`（v2，`from mcp.server import MCPServer`）暴露 6 个工具并支持 `--mode/--port/--baudrate/--host/--http-port/--transport/--bind-host/--bind-port` 参数（Task 11.1-11.4、11.6）
-- [x] 工具注册验证通过：`app._tool_manager._tools` 列出 6 个工具（set_relay/get_relay/toggle_relay/set_all_relays/get_all_relays/set_wifi）；参数校验与异常路径经直接调用验证均符合预期（Task 11.5）
+- [x] `mcp_server/network_client.py` 实现 `turn_on_ack/turn_off_ack/toggle/query`（POST /api/relay 与 GET /api/state，返回实测吸合状态 0/1）（Task 10.2-10.3）
+- [x] `mcp_server/config.json` 含 mode/port/baudrate/host/http_port/devices[8]（name/channel/active_high/note），默认 8 路 active_high=true（Task 11.2）
+- [x] `mcp_server/server.py` 实现 `load_config` + `RelayService`（惰性打开、release_serial 标记 _need_reload、resolve 按名称或通道号、active_high 上下电语义换算）（Task 11.2-11.3）
+- [x] `mcp_server/server.py` 用 `MCPServer`（v2）暴露 8 个工具（list_devices/power_on/power_off/power_toggle/power_status/relay_control/release_serial/set_wifi）并支持 `--config/--transport/--host/--port/--stateless-http` 参数（Task 11.1、11.4-11.6）
+- [x] 工具注册验证通过：`mcp._tool_manager._tools` 列出 8 个工具；参数校验与异常路径经直接调用验证均符合预期（Task 11.7）
 - [x] `README.md` 含接线、烧录、CONTROL_SERIAL 说明、MCP 两种模式启动命令（Task 12）
 
 ## 验证摘要（非 checklist 项，仅记录运行时验证结果）

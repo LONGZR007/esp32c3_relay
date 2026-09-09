@@ -1,10 +1,13 @@
 # 网络后端：通过 HTTP JSON API 调用 ESP32-C3
+# 对外暴露 turn_on_ack / turn_off_ack / toggle / query，返回继电器吸合状态 0/1
 import requests
 from base_client import BaseClient
 
 
 class NetworkClient(BaseClient):
     def __init__(self, host: str, http_port: int = 80):
+        self.host = host
+        self.http_port = http_port
         self.base = "http://{}:{}".format(host, http_port)
 
     def _get(self, path):
@@ -19,61 +22,41 @@ class NetworkClient(BaseClient):
         r.raise_for_status()
         return r.json()
 
-    def set_relay(self, channel: int, state: int, with_reply: bool = False) -> dict:
-        # 设置单路继电器。channel 1-8，state 0/1。
+    def _set_state(self, channel: int, state: int) -> int:
+        # 设置单路并从返回中取出实测吸合状态
         if channel < 1 or channel > 8:
             raise ValueError("channel must be 1-8")
         if state not in (0, 1):
             raise ValueError("state must be 0 or 1")
-        try:
-            resp = self._post("/api/relay", {"ch": channel, "state": state})
-            channels = resp.get("channels", [])
-            if len(channels) >= channel:
-                new_state = channels[channel - 1]
-            else:
-                new_state = state
-            return {"ok": True, "channel": channel, "state": new_state}
-        except Exception as e:
-            return {"ok": False, "channel": channel, "state": state, "error": str(e)}
+        resp = self._post("/api/relay", {"ch": channel, "state": state})
+        channels = resp.get("channels", [])
+        if len(channels) >= channel:
+            return int(channels[channel - 1])
+        return state
 
-    def get_relay(self, channel: int) -> dict:
-        # 查询单路继电器状态。channel 1-8。
+    def _get_state(self, channel: int) -> int:
+        # 从整体状态中取出单路吸合状态
         if channel < 1 or channel > 8:
             raise ValueError("channel must be 1-8")
         channels = self._get("/api/state").get("channels", [])
         if len(channels) >= channel:
-            state = channels[channel - 1]
-        else:
-            state = -1
-        return {"channel": channel, "state": state}
+            return int(channels[channel - 1])
+        raise RuntimeError("channel {} not in state response".format(channel))
 
-    def toggle_relay(self, channel: int) -> dict:
-        # 翻转单路继电器。channel 1-8。
-        if channel < 1 or channel > 8:
-            raise ValueError("channel must be 1-8")
-        try:
-            cur = self.get_relay(channel)["state"]
-            new_state = 1 - cur
-            self.set_relay(channel, new_state)
-            return {"channel": channel, "state": new_state}
-        except Exception as e:
-            return {"channel": channel, "state": -1, "error": str(e)}
+    def turn_on_ack(self, channel: int) -> int:
+        # 继电器吸合（POST state=1），返回实测吸合状态 0/1
+        return self._set_state(channel, 1)
 
-    def set_all_relays(self, state: int) -> dict:
-        # 批量设置全部 8 路。state 0/1。
-        if state not in (0, 1):
-            raise ValueError("state must be 0 or 1")
-        try:
-            self._post("/api/relay/all", {"state": state})
-            return {"ok": True, "state": state}
-        except Exception as e:
-            return {"ok": False, "state": state, "error": str(e)}
+    def turn_off_ack(self, channel: int) -> int:
+        # 继电器断开（POST state=0），返回实测吸合状态 0/1
+        return self._set_state(channel, 0)
 
-    def get_all_relays(self) -> list:
-        # 查询全部 8 路状态。
-        channels = self._get("/api/state").get("channels", [])
-        return [{"channel": i + 1, "state": channels[i]} for i in range(len(channels))]
+    def toggle(self, channel: int) -> int:
+        # 翻转继电器：先查询当前状态再取反，返回翻转后状态
+        cur = self._get_state(channel)
+        new_state = 1 - cur
+        return self._set_state(channel, new_state)
 
-    def set_wifi(self, ssid: str, password: str) -> str:
-        # HTTP 接口不暴露 WiFi 设置
-        return "set_wifi not supported in network mode"
+    def query(self, channel: int) -> int:
+        # 查询继电器状态
+        return self._get_state(channel)

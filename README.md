@@ -95,46 +95,75 @@ wifi:MyHome,pwd:longlong
 pip install -r mcp_server/requirements.txt
 ```
 
-### 启动（两种模式 × 两种传输）
+### 配置 (config.json)
 
-`--mode` 选控制通道（MCP 服务器怎么把命令发给 ESP32-C3），`--transport` 选 MCP 服务器自身的传输（AI 客户端怎么连到本服务器），二者正交组合。
+后端（serial/network）与设备映射都写在 `mcp_server/config.json`：
 
-**串口模式 + stdio**（默认，`mcp dev` 调试用）：
-
-```
-mcp dev mcp_server/server.py -- --mode serial --port /dev/ttyACM0 --baudrate 115200
-```
-
-**网络模式 + stdio**：
-
-```
-mcp dev mcp_server/server.py -- --mode network --host 192.168.1.50 --http-port 80
-```
-
-**串口模式 + streamable-http**（直接 `python` 跑，AI 通过 HTTP 连接）：
-
-```
-python mcp_server/server.py --mode serial --port /dev/ttyACM0 --baudrate 115200 \
-    --transport streamable-http --bind-host 127.0.0.1 --bind-port 8000
+```json
+{
+  "mode": "serial",
+  "port": "COM6",
+  "baudrate": 9600,
+  "host": "192.168.1.50",
+  "http_port": 80,
+  "devices": [
+    { "name": "relay_1", "channel": 1, "active_high": true, "note": "路由器" },
+    ...
+  ]
+}
 ```
 
-端点：`http://127.0.0.1:8000/mcp`
+- `mode`：`serial` 用 `port`/`baudrate` 直连 ESP32-C3；`network` 用 `host`/`http_port` 调 HTTP API
+- `port` 可被环境变量 `RELAY_PORT` 覆盖（不改文件临时换串口）
+- `devices[]`：给 8 路起设备名，`active_high=true` 表示"上电=继电器吸合(GPIO高)"，`false` 表示"上电=继电器断开(低电平触发模块)"，`note` 写设备用途备注
 
-> 默认 `--bind-host 127.0.0.1` 只允许本机访问。如需局域网/外网访问，改 `--bind-host 0.0.0.0` 并自行配置 `transport_security` 白名单（v2 默认对非 localhost 请求返回 421 防止 DNS 重绑定）。
+### 启动（控制通道由 config.json 决定，传输由命令行决定）
 
-> `mcp dev` 仅用于本地调试。生产可用 `mcp install` 注册到 Claude Desktop / Cursor 等 MCP 客户端。
+`--transport` 选 MCP 服务器自身的传输（AI 客户端怎么连到本服务器），与后端 mode 正交。
 
-### 工具清单
+**stdio**（默认，`mcp dev` 调试用）：
 
-| 工具 | 参数 | 返回 | 备注 |
-|---|---|---|---|
-| `set_relay` | `channel 1-8`, `state 0/1`, `with_reply=false` | `{"ok":true,"channel":N,"state":S}` | serial 模式 `with_reply=true` 走 0x02/0x03 应答；network 模式忽略该参数 |
-| `get_relay` | `channel 1-8` | `{"channel":N,"state":S}` | serial 用 0x05；network 走 `GET /api/state` |
-| `toggle_relay` | `channel 1-8` | `{"channel":N,"state":S}` | serial 用 0x04；network 客户端先查再设 |
-| `set_all_relays` | `state 0/1` | `{"ok":true,"state":S}` | serial 8 次 set；network 走 `/api/relay/all` |
-| `get_all_relays` | - | `[{"channel":1,"state":S}, ...]` | serial 8 次 get；network 一次 `GET /api/state` |
-| `set_wifi` | `ssid`, `password` | 回显字符串 | serial 模式发 ASCII 命令；network 模式不支持 |
+```
+mcp dev mcp_server/server.py
+```
+
+**streamable-http**（直接 `python` 跑，AI 通过 HTTP 连接）：
+
+```
+python mcp_server/server.py --transport streamable-http --host 0.0.0.0 --port 8000
+```
+
+端点：`http://<host>:<port>/mcp`。`--no-stateless-http` 切到有状态模式（需客户端维护 session id，默认无状态兼容 Claude Code 等）。
+
+> `--host 0.0.0.0` 绑定所有网卡，但 v2 默认对非 localhost 请求返回 421 防 DNS 重绑定；如需局域网访问要配 `transport_security` 白名单，或先用 `127.0.0.1` 本机验证。
+
+> 临时换串口不改文件：`RELAY_PORT=/dev/ttyUSB1 python mcp_server/server.py`
+
+### 工具清单（三层语义）
+
+**设备层**（面向上下电语义，推荐 AI 优先用）：
+
+| 工具 | 参数 | 返回 |
+|---|---|---|
+| `list_devices` | - | `[{device, channel, active_high, note, relay_state, relay_on, powered, error}]`（某路无响应该路 powered=null 并附 error） |
+| `power_on` | `device`（名称或通道号，如 `relay_1` 或 `"1"`） | `{device, channel, relay_state, relay_on, powered, note}` |
+| `power_off` | `device` | 同上 |
+| `power_toggle` | `device` | 翻转后状态 |
+| `power_status` | `device` | 当前状态 |
+
+**继电器层**（原始通道控制）：
+
+| 工具 | 参数 | 返回 |
+|---|---|---|
+| `relay_control` | `channel 1-8`, `action ∈ {on, off, toggle, query}` | `{channel, relay_state, relay_on}` |
+
+**资源管理 / WiFi**：
+
+| 工具 | 参数 | 返回 |
+|---|---|---|
+| `release_serial` | - | `{released, mode}`（关闭底层连接，下次操作惰性重开） |
+| `set_wifi` | `ssid`, `password` | 回显字符串（仅 serial；network 返回 `set_wifi not supported in network mode`） |
 
 ### 串口异常重开
 
-serial 模式下若串口写入失败 / 读超时 / 端口消失，MCP 服务器会自动 `close()` 旧句柄并从启动参数（`--port` / `--baudrate`）**重新加载配置**后再 `open()`，避免使用陈旧句柄；重开仍失败则该次工具返回 `serial not open`。
+serial 模式下若串口写入失败 / 读超时 / 端口消失，SerialClient 会 `close()` 旧句柄；下次操作时 RelayService 检测到 `_need_reload`，**重新读 `config.json`** 获取 port/baudrate 后重建 SerialClient 并 open，避免使用陈旧句柄；重开仍失败则该次工具返回 `serial not open`。

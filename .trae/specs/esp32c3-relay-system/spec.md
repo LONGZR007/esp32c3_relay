@@ -117,50 +117,70 @@
 系统 SHALL 同时启用 USB CDC 与 UART0，二者一个为 REPL、一个为继电器/WiFi 串口，角色由 `main.py` 常量 `CONTROL_SERIAL` 决定，且无论哪个串口承担控制角色都使用同一套（串口继电器协议 + WiFi 命令）的处理逻辑。
 
 ### Requirement: Python MCP 服务器
-系统 SHALL 提供 Python 实现的 MCP 服务器，AI 可通过 MCP 调用串口或 HTTP 间接控制继电器。所有工具均通过 4 字节串口协议、HTTP API 或 WiFi ASCII 命令实现，不允许设备新增其它协议。
+系统 SHALL 提供 Python 实现的 MCP 服务器，AI 可通过 MCP 调用串口或 HTTP 间接控制继电器。所有工具均通过 4 字节串口协议、HTTP API 或 WiFi ASCII 命令实现，不允许设备新增其它协议。后端（serial/network）由 `config.json` 的 `mode` 字段决定，串口参数与设备映射也从 `config.json` 读取（`RELAY_PORT` 环境变量覆盖串口端口）。
 
-启动参数：
-- `--mode serial|network`（必填）：控制通道（MCP 服务器通过哪种方式把命令发给 ESP32-C3）
-- `--port <device>`（serial 模式必填）：串口设备路径
-- `--baudrate <int>`（serial 模式默认 115200）
-- `--host <ip>`（network 模式必填）：ESP32-C3 的 IP
-- `--http-port <int>`（network 模式默认 80）
-- `--transport stdio|streamable-http`（默认 stdio）：MCP 服务器自身的传输，即 AI 客户端通过哪种方式连到本服务器
-- `--bind-host <ip>`（streamable-http 传输默认 127.0.0.1）：MCP 服务器监听地址
-- `--bind-port <int>`（streamable-http 传输默认 8000）：MCP 服务器监听端口，端点为 `http://<bind_host>:<bind_port>/mcp`
+启动参数（控制 MCP 服务器自身的传输，与后端 mode 正交）：
+- `--config <path>`（默认同目录 `config.json`）：配置文件路径，含 mode/port/baudrate/host/http_port/devices
+- `--transport stdio|sse|streamable-http`（默认 stdio）：MCP 服务器自身的传输
+- `--host <ip>`（sse/streamable-http 默认 127.0.0.1）：MCP 服务器监听地址
+- `--port <int>`（sse/streamable-http 默认 8000）：MCP 服务器监听端口，streamable-http 端点为 `http://<host>:<port>/mcp`
+- `--stateless-http / --no-stateless-http`（默认开）：streamable-http 无状态模式，不要求客户端回传 session id；`--no-stateless-http` 改为有状态
 
-工具清单：
-- `set_relay(channel: int, state: int, with_reply: bool = False) -> dict`
-  - 设置通道状态，channel 范围 1-8，state 为 0/1
-  - serial 模式：`with_reply=True` 时使用功能码 0x02/0x03 并解析回包；`with_reply=False` 时使用 0x00/0x01
-  - network 模式：调用 `POST /api/relay`，`with_reply` 参数忽略（HTTP 自带应答）
-  - 返回 `{"ok":true,"channel":N,"state":S}`
-- `get_relay(channel: int) -> dict` — serial 用 0x05；network 用 `GET /api/state` 取整体后取单路，返回 `{"channel":N,"state":S}`
-- `toggle_relay(channel: int) -> dict` — serial 用 0x04；network 在客户端先 `get_relay` 再 `set_relay` 取反，返回 `{"channel":N,"state":S}`
-- `set_all_relays(state: int) -> dict` — serial 8 次 `set_relay(..., with_reply=False)；network 调用 `POST /api/relay/all`，返回 `{"ok":true,"state":S}`
-- `get_all_relays() -> list[dict]` — serial 8 次 `get_relay`；network 一次 `GET /api/state`，返回 `[{"channel":1,"state":S},...]`
-- `set_wifi(ssid: str, password: str) -> str` — serial 发送 ASCII 命令；network 不支持（HTTP 接口不暴露 WiFi 设置），调用时返回错误信息 `set_wifi not supported in network mode`
+config.json 字段：
+- `mode: serial|network` — 后端控制通道
+- `port` / `baudrate` — serial 模式串口设备与波特率（默认 9600，与串口通信协议文档一致；`RELAY_PORT` 环境变量覆盖 port）
+- `host` / `http_port` — network 模式 ESP32-C3 的 IP 与 HTTP 端口（默认 80）
+- `devices[]` — 设备映射，每项 `{name, channel 1-8, active_high, note}`；`active_high=true` 表示"上电=继电器吸合(GPIO高)"，`false` 表示"上电=继电器断开(低电平触发)"
 
-#### Scenario: 工具调用（serial）
-- WHEN AI 调用 `set_relay(channel=1, state=1, with_reply=True)` 且 mode=serial
-- THEN MCP 服务器发送 4 字节帧 `A0 01 03 A4`
-  - AND 收到回包后返回 `{"ok":true,"channel":1,"state":1}`
+工具清单（三层语义）：
+- 设备层（面向上下电语义，推荐 AI 优先使用）：
+  - `list_devices() -> list[dict]` — 遍历 config 的 devices 逐路 query，返回 `[{device, channel, active_high, note, relay_state, relay_on, powered, error}]`；某路无响应时该路 `powered=null` 并附 `error`，不影响其它路
+  - `power_on(device: str) -> dict` — 按 active_high 换算后调 `turn_on_ack`/`turn_off_ack`，返回 `{device, channel, relay_state, relay_on, powered, note}`
+  - `power_off(device: str) -> dict` — 同上反向
+  - `power_toggle(device: str) -> dict` — 调 `toggle`，返回翻转后状态
+  - `power_status(device: str) -> dict` — 调 `query`，返回当前状态
+  - `device` 可传设备名（如 `relay_1`）或通道号字符串（如 `"1"`）
+- 继电器层（原始通道控制）：
+  - `relay_control(channel: int, action: str) -> dict` — `action ∈ {on, off, toggle, query}`，serial 用 0x03/0x02/0x04/0x05；network 用 `POST /api/relay` 或 `GET /api/state`，返回 `{channel, relay_state, relay_on}`
+- 资源管理：
+  - `release_serial() -> dict` — 关闭底层连接（串口/HTTP 句柄），下次操作惰性重开；serial 模式下若曾打开失败会先重载 config 再打开，返回 `{released, mode}`
+- WiFi 配置（仅 serial）：
+  - `set_wifi(ssid: str, password: str) -> str` — serial 发送 ASCII 命令 `wifi:<ssid>,pwd:<password>\n`；network 返回 `set_wifi not supported in network mode`
 
-#### Scenario: 工具调用（network）
-- WHEN AI 调用 `set_relay(channel=1, state=1)` 且 mode=network
-- THEN MCP 服务器发送 `POST /api/relay` body `{"ch":1,"state":1}`
-  - AND 返回 `{"ok":true,"channel":1,"state":1}`
+后端接口（BaseClient，serial/network 都实现）：`turn_on_ack(ch)->int` / `turn_off_ack(ch)->int` / `toggle(ch)->int` / `query(ch)->int` / `release_serial()->dict` / `set_wifi(ssid,pwd)->str` / `close()`，返回继电器吸合状态 0/1，上层 RelayService 按 active_high 换算上下电语义。
+
+#### Scenario: 设备层上电（serial, active_high=true）
+- WHEN AI 调用 `power_on(device="relay_1")` 且 mode=serial、active_high=true
+- THEN RelayService 调 `SerialClient.turn_on_ack(1)`，发送 4 字节帧 `A0 01 03 A4`
+  - AND 收到回包 `A0 01 01 A2` 后返回 `{"device":"relay_1","channel":1,"relay_state":1,"relay_on":true,"powered":true,"note":""}`
+
+#### Scenario: 设备层上电（network）
+- WHEN AI 调用 `power_on(device="relay_1")` 且 mode=network、active_high=true
+- THEN RelayService 调 `NetworkClient.turn_on_ack(1)`，发送 `POST /api/relay` body `{"ch":1,"state":1}`
+  - AND 从返回 `channels` 取第 1 路作为 relay_state，返回 `{"device":"relay_1","channel":1,"relay_state":1,"relay_on":true,"powered":true,"note":""}`
+
+#### Scenario: 低电平触发模块（active_high=false）
+- WHEN 设备 active_high=false 且调用 `power_on`
+- THEN RelayService 调 `turn_off_ack`（继电器断开=设备上电），返回 `powered=true` 当 relay_state=0
+
+#### Scenario: 继电器层原始操作
+- WHEN AI 调用 `relay_control(channel=2, action="off")` 且 mode=serial
+- THEN 发送 `A0 02 02 A4`，返回 `{"channel":2,"relay_state":0,"relay_on":false}`
 
 #### Scenario: 参数校验
-- WHEN 调用 `set_relay(channel=99, state=1)`
-- THEN 在发送前抛出参数异常，返回错误信息（不发起任何通讯）
+- WHEN 调用 `relay_control(channel=99, action="on")` 或 `action="foo"`
+- THEN 在发送前抛参数异常（channel 必须 1-8，action 必须 on/off/toggle/query）
 
 #### Scenario: 串口异常重开重载配置（serial）
 - WHEN serial 模式下串口写入失败 / 读超时 / 端口消失
-- THEN MCP 服务器关闭旧句柄
-  - AND 从启动配置重新加载 `--port` / `--baudrate`
-  - AND 重新打开串口
+- THEN SerialClient 关闭旧句柄
+  - AND 下次操作时 RelayService 检测到 `_need_reload`，重新读 `config.json` 获取 port/baudrate
+  - AND 用新配置重建 SerialClient 并打开
   - AND 重开成功后下一次工具调用继续工作；重开失败则该次工具返回错误 `serial not open`
+
+#### Scenario: release_serial 后惰性重开
+- WHEN 调用 `release_serial()` 后再调用任意设备/继电器工具
+- THEN RelayService 置空 controller 并标记 `_need_reload`，下次操作重新读 config + 重建后端
 
 ## MODIFIED Requirements
 

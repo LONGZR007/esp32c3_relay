@@ -46,25 +46,26 @@
   - [x] SubTask 8.4: 通道数 change 仅扩缩本地缓存，超出 1-8 的卡片提交时若后端 400 则忽略 + 提示
 
 - [x] Task 9: 实现 Python 串口协议客户端（serial 模式后端）
-  - [x] SubTask 9.1: 在 `mcp_server/serial_client.py` 实现 `open(port, baudrate)`、`close()`，使用 pyserial
-  - [x] SubTask 9.2: 实现 `set_relay(ch, state, with_reply=False)`：构造 4 字节帧，发送，`with_reply=True` 时按 0x02/0x03 等待并校验回包，返回 `dict`
-  - [x] SubTask 9.3: 实现 `get_relay(ch)`（0x05）、`toggle_relay(ch)`（0x04）、`set_all_relays(state)`、`get_all_relays()`、`set_wifi(ssid, pwd)`
-  - [x] SubTask 9.4: 对 `ch` 越界（1-8）、`state` 非 0/1 在发送前抛 `ValueError`
-  - [x] SubTask 9.5: 实现串口异常捕获 + `reopen()` 重载 port/baudrate 配置后再 open（_ensure_open 在句柄无效时自动 reopen）
+  - [x] SubTask 9.1: 在 `mcp_server/serial_client.py` 实现 `open()`、`close()`、`reopen()`、`set_port(port, baudrate)`，使用 pyserial
+  - [x] SubTask 9.2: 实现 `turn_on_ack(ch)`（0x03）、`turn_off_ack(ch)`（0x02）、`toggle(ch)`（0x04）、`query(ch)`（0x05），统一走 `_ack_op` 发 4 字节帧并读回包返回实测吸合状态 0/1
+  - [x] SubTask 9.3: 实现 `release_serial()` 关闭句柄并标记下次需重载 config；`set_wifi(ssid, pwd)` 发 ASCII 命令
+  - [x] SubTask 9.4: 对 `ch` 越界（1-8）在发送前抛 `ValueError`
+  - [x] SubTask 9.5: 实现串口异常捕获 + `reopen()` 重载 port/baudrate 配置后再 open（`_ensure_open` 在句柄无效时自动 reopen）
 
 - [x] Task 10: 实现 HTTP 网络客户端（network 模式后端）
   - [x] SubTask 10.1: 在 `mcp_server/network_client.py` 实现 `__init__(host, http_port)`，使用 `requests`
-  - [x] SubTask 10.2: 实现 `set_relay/get_relay/set_all_relays/get_all_relays` 走对应 HTTP 路由
-  - [x] SubTask 10.3: `toggle_relay` 在客户端先 `get_relay` 再 `set_relay(取反)`
-  - [x] SubTask 10.4: `set_wifi` 直接返回错误字符串 `set_wifi not supported in network mode`
+  - [x] SubTask 10.2: 实现 `turn_on_ack(ch)`=`_set_state(ch,1)`、`turn_off_ack(ch)`=`_set_state(ch,0)`、`query(ch)`=`_get_state(ch)`，从 `POST /api/relay` 与 `GET /api/state` 取实测吸合状态 0/1
+  - [x] SubTask 10.3: `toggle(ch)` 先 `query` 取反再 `_set_state`，返回翻转后状态
+  - [x] SubTask 10.4: 继承 `BaseClient` 的 `release_serial`/`set_wifi`（network 无串口，set_wifi 返回 `set_wifi not supported in network mode`）
 
-- [x] Task 11: 实现 MCP 服务器
-  - [x] SubTask 11.1: 在 `mcp_server/server.py` 用 `from mcp.server import MCPServer` 创建 `app = MCPServer("esp32c3-relay")`（v2 API；`@app.tool()` 与 `app.run()` 写法不变）
-  - [x] SubTask 11.2: 解析 `--mode`/`--port`/`--baudrate`/`--host`/`--http-port`/`--transport`/`--bind-host`/`--bind-port` 命令行参数（`--mode` 选控制通道，`--transport` 选 MCP 服务器自身传输）
-  - [x] SubTask 11.3: 根据 `--mode` 实例化 `SerialClient` 或 `NetworkClient` 作为后端
-  - [x] SubTask 11.4: 用 `@app.tool()` 暴露 6 个工具，每个工具调用后端方法并返回结果；参数文档串写明含义
-  - [x] SubTask 11.5: 工具注册验证通过（`app._tool_manager._tools` 列出 6 个工具：set_relay/get_relay/toggle_relay/set_all_relays/get_all_relays/set_wifi）；直接调用 set_relay(99,1) 返回 `{'error':'channel must be 1-8'}`，get_relay(1) 在 serial not open 时返回 `{'channel':1,'state':-1,'error':'serial not open'}`，network set_wifi 返回 `set_wifi not supported in network mode`
-  - [x] SubTask 11.6: `--transport streamable-http` 时调用 `app.run(transport="streamable-http", host=args.bind_host, port=args.bind_port)`，端点 `http://<bind_host>:<bind_port>/mcp`；默认 stdio 行为不变
+- [x] Task 11: 实现 MCP 服务器（config.json 驱动 + 三层工具语义）
+  - [x] SubTask 11.1: 在 `mcp_server/server.py` 用 `from mcp.server import MCPServer` 创建 `mcp = MCPServer("esp32c3-relay")`（v2 API；`@mcp.tool()` 与 `mcp.run()` 写法不变）
+  - [x] SubTask 11.2: 实现 `load_config(path)` 读 `config.json`，校验 mode/port/baudrate/host/http_port/devices（name/channel 1-8/active_high/note，通道不重复）；`RELAY_PORT` 环境变量覆盖 serial 模式的 port
+  - [x] SubTask 11.3: 实现 `RelayService` 类：惰性打开后端（`controller` property）、`release_serial` 置空并标记 `_need_reload`、`resolve(device)` 按名称或通道号解析、`relay_to_powered`/`powered_to_relay_on` 按 active_high 换算上下电语义
+  - [x] SubTask 11.4: 用 `@mcp.tool()` 暴露 8 个工具：`list_devices`/`power_on`/`power_off`/`power_toggle`/`power_status`/`relay_control`/`release_serial`/`set_wifi`，每个工具调用 RelayService 方法
+  - [x] SubTask 11.5: 解析 `--config`/`--transport`/`--host`/`--port`/`--stateless-http` 命令行参数；`--transport` 与后端 mode（由 config 决定）正交
+  - [x] SubTask 11.6: `--transport streamable-http` 时调用 `mcp.run(transport="streamable-http", host=..., port=..., stateless_http=...)`，端点 `http://<host>:<port>/mcp`；`--transport sse` 走 sse；默认 stdio
+  - [x] SubTask 11.7: 工具注册验证通过（`mcp._tool_manager._tools` 列出 8 个工具）；relay_control(99,"on") 抛 ValueError；network set_wifi 返回 `set_wifi not supported in network mode`
 
 - [x] Task 12: 更新 `README.md`
   - [x] SubTask 12.1: 写入硬件接线（GPIO1-8=继电器，UART0=默认 TX/RX，USB CDC）

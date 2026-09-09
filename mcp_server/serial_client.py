@@ -1,27 +1,36 @@
 # 串口后端：通过 pyserial 直连 ESP32-C3，使用 4 字节帧协议
+# 对外暴露 turn_on_ack / turn_off_ack / toggle / query（带应答），返回继电器吸合状态 0/1
 import time
 import serial
 from base_client import BaseClient
 
-# 帧头固定值
+# 帧头固定值（与 firmware/serial_proto.py 一致）
 HEADER = 0xA0
 
 
 class SerialClient(BaseClient):
-    def __init__(self, port: str, baudrate: int = 115200):
-        # 保存串口配置，初始化句柄并尝试打开
+    def __init__(self, port: str, baudrate: int = 9600):
+        # 保存串口配置，句柄惰性打开（首次操作时才 open）
         self.port = port
         self.baudrate = baudrate
         self.ser = None
+        self._need_reload = False
+        # 上次打开失败后，再次打开前需要重新读 config（由上层 RelayService 在重载后调 set_port 更新）
         self.open()
 
+    def set_port(self, port: str, baudrate: int) -> None:
+        """更新串口配置（config 重载后调用），下次 open 使用新值。"""
+        self.port = port
+        self.baudrate = baudrate
+
     def open(self):
-        # 打开串口，异常时打印并置空句柄
+        # 打开串口，异常时打印并置空句柄，标记下次需重载配置
         try:
             self.ser = serial.Serial(self.port, self.baudrate, timeout=1)
         except Exception as e:
             print("[serial] open error:", e)
             self.ser = None
+            self._need_reload = True
 
     def close(self):
         # 关闭句柄并置空
@@ -32,12 +41,16 @@ class SerialClient(BaseClient):
                 pass
             self.ser = None
 
+    def release_serial(self) -> dict:
+        """释放串口，下次操作会惰性重开（且若曾打开失败会先重载 config）。"""
+        was_open = self.ser is not None
+        self.close()
+        return {"released": was_open, "mode": "serial"}
+
     def reopen(self):
         # 关闭旧句柄，重新基于 self.port / self.baudrate 配置调用 open()
         # 异常重开必须重载配置（即使 self 上配置不变，也保证从配置重新加载的语义）
         self.close()
-        port = self.port
-        baudrate = self.baudrate
         self.open()
 
     def _ensure_open(self):
@@ -52,7 +65,7 @@ class SerialClient(BaseClient):
         frame = bytes([HEADER, addr, func, (HEADER + addr + func) & 0xFF])
         try:
             self.ser.write(frame)
-        except serial.SerialException as e:
+        except serial.SerialException:
             self.close()
             raise RuntimeError("serial write failed")
 
@@ -60,7 +73,7 @@ class SerialClient(BaseClient):
         # 读 4 字节回包，校验帧头/校验和/地址，成功返回 (addr, state)
         try:
             data = self.ser.read(4)
-        except serial.SerialException as e:
+        except serial.SerialException:
             self.close()
             raise RuntimeError("serial read failed")
         if len(data) < 4:
@@ -77,71 +90,39 @@ class SerialClient(BaseClient):
             raise RuntimeError("bad reply")
         return (addr, state)
 
-    def set_relay(self, channel: int, state: int, with_reply: bool = False) -> dict:
-        # 设置单路继电器。channel 1-8，state 0/1。
+    def _ack_op(self, channel: int, func: int) -> int:
+        # 通用：发送带应答功能码，读回包返回实测吸合状态 0/1
         if channel < 1 or channel > 8:
             raise ValueError("channel must be 1-8")
-        if state not in (0, 1):
-            raise ValueError("state must be 0 or 1")
-        try:
-            self._ensure_open()
-            if with_reply:
-                func = 0x03 if state == 1 else 0x02
-                self._send_frame(channel, func)
-                _, state = self._read_reply(channel)
-            else:
-                func = 0x01 if state == 1 else 0x00
-                self._send_frame(channel, func)
-            return {"ok": True, "channel": channel, "state": state}
-        except RuntimeError as e:
-            return {"ok": False, "channel": channel, "state": state, "error": str(e)}
+        self._ensure_open()
+        self._send_frame(channel, func)
+        _, state = self._read_reply(channel)
+        return state
 
-    def get_relay(self, channel: int) -> dict:
-        # 查询单路继电器状态。channel 1-8。
-        if channel < 1 or channel > 8:
-            raise ValueError("channel must be 1-8")
-        try:
-            self._ensure_open()
-            self._send_frame(channel, 0x05)
-            _, state = self._read_reply(channel)
-            return {"channel": channel, "state": state}
-        except RuntimeError as e:
-            return {"channel": channel, "state": -1, "error": str(e)}
+    def turn_on_ack(self, channel: int) -> int:
+        # 继电器吸合并应答（功能码 0x03）
+        return self._ack_op(channel, 0x03)
 
-    def toggle_relay(self, channel: int) -> dict:
-        # 翻转单路继电器。channel 1-8。
-        if channel < 1 or channel > 8:
-            raise ValueError("channel must be 1-8")
-        try:
-            self._ensure_open()
-            self._send_frame(channel, 0x04)
-            _, state = self._read_reply(channel)
-            return {"channel": channel, "state": state}
-        except RuntimeError as e:
-            return {"channel": channel, "state": -1, "error": str(e)}
+    def turn_off_ack(self, channel: int) -> int:
+        # 继电器断开并应答（功能码 0x02）
+        return self._ack_op(channel, 0x02)
 
-    def set_all_relays(self, state: int) -> dict:
-        # 批量设置全部 8 路。state 0/1。
-        if state not in (0, 1):
-            raise ValueError("state must be 0 or 1")
-        for ch in range(1, 9):
-            r = self.set_relay(ch, state, with_reply=False)
-            if not r.get("ok"):
-                return {"ok": False, "state": state, "error": r.get("error", "unknown")}
-        return {"ok": True, "state": state}
+    def toggle(self, channel: int) -> int:
+        # 翻转继电器并应答（功能码 0x04），返回翻转后状态
+        return self._ack_op(channel, 0x04)
 
-    def get_all_relays(self) -> list:
-        # 查询全部 8 路状态。
-        return [self.get_relay(ch) for ch in range(1, 9)]
+    def query(self, channel: int) -> int:
+        # 查询继电器状态（功能码 0x05）
+        return self._ack_op(channel, 0x05)
 
     def set_wifi(self, ssid: str, password: str) -> str:
-        # 通过 ASCII 命令配置 WiFi，设备收到后会重启。
+        # 通过 ASCII 命令配置 WiFi，设备收到后会重启
         try:
             self._ensure_open()
             cmd = "wifi:{ssid},pwd:{password}\n".format(ssid=ssid, password=password).encode("utf-8")
             try:
                 self.ser.write(cmd)
-            except serial.SerialException as e:
+            except serial.SerialException:
                 self.close()
                 raise RuntimeError("serial write failed")
             # 设备收到 wifi 命令会 reset，读回显时端口可能已断开

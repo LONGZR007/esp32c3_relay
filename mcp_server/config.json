@@ -1,0 +1,18 @@
+{
+  "_comment": "ESP32-C3 8 路继电器 MCP 配置。mode=serial 用 port/baudrate；mode=network 用 host/http_port。RELAY_PORT 环境变量覆盖 port。active_high=true 表示上电=继电器吸合(GPIO高)，false 表示上电=继电器断开(低电平触发模块)。",
+  "mode": "serial",
+  "port": "COM6",
+  "baudrate": 9600,
+  "host": "192.168.1.50",
+  "http_port": 80,
+  "devices": [
+    { "name": "relay_1", "channel": 1, "active_high": true, "note": "" },
+    { "name": "relay_2", "channel": 2, "active_high": true, "note": "" },
+    { "name": "relay_3", "channel": 3, "active_high": true, "note": "" },
+    { "name": "relay_4", "channel": 4, "active_high": true, "note": "" },
+    { "name": "relay_5", "channel": 5, "active_high": true, "note": "" },
+    { "name": "relay_6", "channel": 6, "active_high": true, "note": "" },
+    { "name": "relay_7", "channel": 7, "active_high": true, "note": "" },
+    { "name": "relay_8", "channel": 8, "active_high": true, "note": "" }
+  ]
+}
