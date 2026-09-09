@@ -73,11 +73,19 @@ def set_wifi(ssid: str, password: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser()
+    # 控制通道：MCP 服务器通过哪种方式把命令发给 ESP32-C3
     parser.add_argument("--mode", required=True, choices=["serial", "network"])
+    # serial 模式：ESP32-C3 的串口
     parser.add_argument("--port")
     parser.add_argument("--baudrate", type=int, default=115200)
+    # network 模式：ESP32-C3 的 IP 与 HTTP 端口
     parser.add_argument("--host")
     parser.add_argument("--http-port", type=int, default=80)
+    # MCP 服务器自身的传输：AI 客户端通过哪种方式连到本服务器
+    parser.add_argument("--transport", choices=["stdio", "streamable-http"], default="stdio")
+    # streamable-http 传输：本服务器监听的地址与端口
+    parser.add_argument("--bind-host", default="127.0.0.1")
+    parser.add_argument("--bind-port", type=int, default=8000)
     args = parser.parse_args()
 
     global _backend
@@ -90,7 +98,12 @@ def main():
             raise SystemExit("--host required in network mode")
         _backend = NetworkClient(args.host, args.http_port)
 
-    app.run()
+    if args.transport == "streamable-http":
+        app.run(transport="streamable-http",
+                host=args.bind_host,
+                port=args.bind_port)
+    else:
+        app.run()
 
 
 if __name__ == "__main__":

@@ -120,11 +120,14 @@
 系统 SHALL 提供 Python 实现的 MCP 服务器，AI 可通过 MCP 调用串口或 HTTP 间接控制继电器。所有工具均通过 4 字节串口协议、HTTP API 或 WiFi ASCII 命令实现，不允许设备新增其它协议。
 
 启动参数：
-- `--mode serial|network`（必填）：控制通道
+- `--mode serial|network`（必填）：控制通道（MCP 服务器通过哪种方式把命令发给 ESP32-C3）
 - `--port <device>`（serial 模式必填）：串口设备路径
 - `--baudrate <int>`（serial 模式默认 115200）
 - `--host <ip>`（network 模式必填）：ESP32-C3 的 IP
 - `--http-port <int>`（network 模式默认 80）
+- `--transport stdio|streamable-http`（默认 stdio）：MCP 服务器自身的传输，即 AI 客户端通过哪种方式连到本服务器
+- `--bind-host <ip>`（streamable-http 传输默认 127.0.0.1）：MCP 服务器监听地址
+- `--bind-port <int>`（streamable-http 传输默认 8000）：MCP 服务器监听端口，端点为 `http://<bind_host>:<bind_port>/mcp`
 
 工具清单：
 - `set_relay(channel: int, state: int, with_reply: bool = False) -> dict`

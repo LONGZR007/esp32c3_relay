@@ -95,19 +95,32 @@ wifi:MyHome,pwd:longlong
 pip install -r mcp_server/requirements.txt
 ```
 
-### 启动（两种模式）
+### 启动（两种模式 × 两种传输）
 
-**串口模式**（通过 pyserial 直连设备，使用 4 字节协议）：
+`--mode` 选控制通道（MCP 服务器怎么把命令发给 ESP32-C3），`--transport` 选 MCP 服务器自身的传输（AI 客户端怎么连到本服务器），二者正交组合。
+
+**串口模式 + stdio**（默认，`mcp dev` 调试用）：
 
 ```
 mcp dev mcp_server/server.py -- --mode serial --port /dev/ttyACM0 --baudrate 115200
 ```
 
-**网络模式**（通过 HTTP API 调用设备）：
+**网络模式 + stdio**：
 
 ```
 mcp dev mcp_server/server.py -- --mode network --host 192.168.1.50 --http-port 80
 ```
+
+**串口模式 + streamable-http**（直接 `python` 跑，AI 通过 HTTP 连接）：
+
+```
+python mcp_server/server.py --mode serial --port /dev/ttyACM0 --baudrate 115200 \
+    --transport streamable-http --bind-host 127.0.0.1 --bind-port 8000
+```
+
+端点：`http://127.0.0.1:8000/mcp`
+
+> 默认 `--bind-host 127.0.0.1` 只允许本机访问。如需局域网/外网访问，改 `--bind-host 0.0.0.0` 并自行配置 `transport_security` 白名单（v2 默认对非 localhost 请求返回 421 防止 DNS 重绑定）。
 
 > `mcp dev` 仅用于本地调试。生产可用 `mcp install` 注册到 Claude Desktop / Cursor 等 MCP 客户端。
 

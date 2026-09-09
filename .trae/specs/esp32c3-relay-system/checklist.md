@@ -27,7 +27,7 @@
 - [x] `mcp_server/serial_client.py` 在 ch/state 越界时发送前抛 `ValueError`（Task 9.4）
 - [x] `mcp_server/serial_client.py` 实现串口异常捕获 + `reopen()` 重载 port/baudrate 配置后再 open（Task 9.5）
 - [x] `mcp_server/network_client.py` 实现 `set_relay/get_relay/set_all_relays/get_all_relays/toggle_relay/set_wifi`（Task 10.2-10.4）
-- [x] `mcp_server/server.py` 用 `MCPServer`（v2，`from mcp.server import MCPServer`）暴露 6 个工具并支持 `--mode/--port/--baudrate/--host/--http-port` 参数（Task 11.1-11.4）
+- [x] `mcp_server/server.py` 用 `MCPServer`（v2，`from mcp.server import MCPServer`）暴露 6 个工具并支持 `--mode/--port/--baudrate/--host/--http-port/--transport/--bind-host/--bind-port` 参数（Task 11.1-11.4、11.6）
 - [x] 工具注册验证通过：`app._tool_manager._tools` 列出 6 个工具（set_relay/get_relay/toggle_relay/set_all_relays/get_all_relays/set_wifi）；参数校验与异常路径经直接调用验证均符合预期（Task 11.5）
 - [x] `README.md` 含接线、烧录、CONTROL_SERIAL 说明、MCP 两种模式启动命令（Task 12）
 

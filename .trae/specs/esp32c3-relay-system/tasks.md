@@ -60,10 +60,11 @@
 
 - [x] Task 11: 实现 MCP 服务器
   - [x] SubTask 11.1: 在 `mcp_server/server.py` 用 `from mcp.server import MCPServer` 创建 `app = MCPServer("esp32c3-relay")`（v2 API；`@app.tool()` 与 `app.run()` 写法不变）
-  - [x] SubTask 11.2: 解析 `--mode`/`--port`/`--baudrate`/`--host`/`--http-port` 命令行参数
+  - [x] SubTask 11.2: 解析 `--mode`/`--port`/`--baudrate`/`--host`/`--http-port`/`--transport`/`--bind-host`/`--bind-port` 命令行参数（`--mode` 选控制通道，`--transport` 选 MCP 服务器自身传输）
   - [x] SubTask 11.3: 根据 `--mode` 实例化 `SerialClient` 或 `NetworkClient` 作为后端
   - [x] SubTask 11.4: 用 `@app.tool()` 暴露 6 个工具，每个工具调用后端方法并返回结果；参数文档串写明含义
   - [x] SubTask 11.5: 工具注册验证通过（`app._tool_manager._tools` 列出 6 个工具：set_relay/get_relay/toggle_relay/set_all_relays/get_all_relays/set_wifi）；直接调用 set_relay(99,1) 返回 `{'error':'channel must be 1-8'}`，get_relay(1) 在 serial not open 时返回 `{'channel':1,'state':-1,'error':'serial not open'}`，network set_wifi 返回 `set_wifi not supported in network mode`
+  - [x] SubTask 11.6: `--transport streamable-http` 时调用 `app.run(transport="streamable-http", host=args.bind_host, port=args.bind_port)`，端点 `http://<bind_host>:<bind_port>/mcp`；默认 stdio 行为不变
 
 - [x] Task 12: 更新 `README.md`
   - [x] SubTask 12.1: 写入硬件接线（GPIO1-8=继电器，UART0=默认 TX/RX，USB CDC）
