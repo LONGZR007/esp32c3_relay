@@ -1,0 +1,27 @@
+# Checklist
+
+- [ ] `firmware/` 目录下 7 个 Python 文件骨架创建完成（Task 1.1）
+- [ ] `mcp_server/` 目录下 3 个文件骨架创建完成（Task 1.2）
+- [ ] `requirements.txt` 包含 `pyserial` 与 `mcp` 两行依赖（Task 1.3）
+- [ ] `firmware/relay.py` 实现 GPIO1-8 驱动与单例 `relays`（Task 2）
+- [ ] `firmware/config.py` 实现 `load_wifi/save_wifi` 存到 `/wifi.cfg`（Task 3.1）
+- [ ] `firmware/wifi_manager.py` 实现 STA 优先 + AP 回退 `ESP32C3-Relay`（Task 3.2）
+- [ ] `firmware/main.py` 启动阶段调用 `wifi_manager.connect()`（Task 3.3）
+- [ ] `firmware/serial_proto.py` 实现 4 字节 `parse` 与 `build_state`，常量 `HEADER=0xA0`（Task 4.1-4.3）
+- [ ] `firmware/serial_control.py` 实现 4 字节帧状态机 + WiFi ASCII 命令解析（Task 4.4）
+- [ ] `firmware/main.py` 实现 GPIO9 角色开关选择 REPL / 控制串口（Task 5.1-5.4）
+- [ ] `firmware/web_server.py` 路由 `GET /api/state` 返回 `{"channels":[...]}`（Task 6.2）
+- [ ] `firmware/web_server.py` 路由 `POST /api/relay` 实现并返回最新状态（Task 6.3）
+- [ ] `firmware/web_server.py` 路由 `POST /api/relay/all`（Task 6.4）
+- [ ] `firmware/web_server.py` 越界 400 + CORS 头（Task 6.5）
+- [ ] `firmware/web_server.py` 路由 `GET /` 返回 `index.html`（Task 7.1）
+- [ ] `index.html` UI、CSS、SVG、HTML 结构未变更（Task 8.1）
+- [ ] `index.html` `<script>` 改为 `GET /api/state` 渲染 + 失败回退（Task 8.2）
+- [ ] `index.html` 卡片/全局按钮走 `POST /api/relay` 等接口（Task 8.3）
+- [ ] `index.html` 通道数超出 1-8 时按后端 400 忽略（Task 8.4）
+- [ ] `mcp_server/serial_client.py` 实现 `set_relay(channel, state, with_reply=False)` 并按 `with_reply` 选 0x02/0x03 或 0x00/0x01（Task 9.2）
+- [ ] `mcp_server/serial_client.py` 实现 `get_relay / toggle_relay / set_all_relays / get_all_relays / set_wifi`（Task 9.3）
+- [ ] `mcp_server/serial_client.py` 在串口未连接时返回错误，不抛异常导致 MCP server crash（Task 9.4）
+- [ ] `mcp_server/server.py` 用 `FastMCP` 暴露全部 7 个工具并接受 `--port`/`--baudrate`（Task 10.1-10.3）
+- [ ] `mcp dev mcp_server/server.py` 能列工具，`tools/call set_relay channel=1 state=1` 走通（Task 10.4）
+- [ ] `README.md` 含接线、烧录、MCP 启动最小步骤（Task 11）
