@@ -18,11 +18,11 @@
 │   ├── web_server.py       # HTTP JSON API + 静态服务 index.html
 │   └── index.html          # 与根目录一致的网页（烧入设备）
 └── mcp_server/             # Python MCP 服务器
-    ├── server.py            # FastMCP 暴露 6 个工具
+    ├── server.py            # MCPServer (mcp v2) 暴露 6 个工具
     ├── serial_client.py    # 串口模式后端（pyserial + 4 字节协议）
     ├── network_client.py   # 网络模式后端（requests + HTTP API）
     ├── base_client.py      # 后端接口基类
-    └── requirements.txt    # pyserial / mcp / requests
+    └── requirements.txt    # pyserial / mcp>=2 / requests
 ```
 
 ## 硬件接线

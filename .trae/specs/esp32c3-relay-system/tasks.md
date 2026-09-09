@@ -3,7 +3,7 @@
 - [x] Task 1: 准备项目骨架与依赖声明
   - [x] SubTask 1.1: 在 `firmware/` 下创建 `main.py`、`relay.py`、`wifi_manager.py`、`web_server.py`、`serial_proto.py`、`serial_control.py`、`config.py`
   - [x] SubTask 1.2: 在 `mcp_server/` 下创建 `server.py`、`serial_client.py`、`network_client.py`、`base_client.py`、`requirements.txt`
-  - [x] SubTask 1.3: 在 `requirements.txt` 写入 `pyserial`、`mcp<2`、`requests` 三行依赖
+  - [x] SubTask 1.3: 在 `requirements.txt` 写入 `pyserial`、`mcp>=2`、`requests` 三行依赖
 
 - [x] Task 2: 实现继电器 HAL（GPIO1-8 驱动）
   - [x] SubTask 2.1: 在 `firmware/relay.py` 定义 `Relays` 类，初始化 `Pin(1..8, Pin.OUT, value=0)`
@@ -59,7 +59,7 @@
   - [x] SubTask 10.4: `set_wifi` 直接返回错误字符串 `set_wifi not supported in network mode`
 
 - [x] Task 11: 实现 MCP 服务器
-  - [x] SubTask 11.1: 在 `mcp_server/server.py` 用 `from mcp.server.fastmcp import FastMCP` 创建 `app = FastMCP("esp32c3-relay")`
+  - [x] SubTask 11.1: 在 `mcp_server/server.py` 用 `from mcp.server import MCPServer` 创建 `app = MCPServer("esp32c3-relay")`（v2 API；`@app.tool()` 与 `app.run()` 写法不变）
   - [x] SubTask 11.2: 解析 `--mode`/`--port`/`--baudrate`/`--host`/`--http-port` 命令行参数
   - [x] SubTask 11.3: 根据 `--mode` 实例化 `SerialClient` 或 `NetworkClient` 作为后端
   - [x] SubTask 11.4: 用 `@app.tool()` 暴露 6 个工具，每个工具调用后端方法并返回结果；参数文档串写明含义

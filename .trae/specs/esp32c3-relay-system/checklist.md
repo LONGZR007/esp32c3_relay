@@ -2,7 +2,7 @@
 
 - [x] `firmware/` 目录下 7 个 Python 文件骨架创建完成（Task 1.1）
 - [x] `mcp_server/` 目录下 5 个文件骨架创建完成（Task 1.2）
-- [x] `requirements.txt` 包含 `pyserial`、`mcp<2`、`requests` 三行依赖（Task 1.3）
+- [x] `requirements.txt` 包含 `pyserial`、`mcp>=2`、`requests` 三行依赖（Task 1.3）
 - [x] `firmware/relay.py` 实现 GPIO1-8 驱动与单例 `relays`（Task 2）
 - [x] `firmware/config.py` 实现 `load_wifi/save_wifi` 存到 `/wifi.cfg`（Task 3.1）
 - [x] `firmware/wifi_manager.py` 实现 STA 优先 + AP 回退 `ESP32C3-Relay` + 持续重试（Task 3.2）
@@ -27,7 +27,7 @@
 - [x] `mcp_server/serial_client.py` 在 ch/state 越界时发送前抛 `ValueError`（Task 9.4）
 - [x] `mcp_server/serial_client.py` 实现串口异常捕获 + `reopen()` 重载 port/baudrate 配置后再 open（Task 9.5）
 - [x] `mcp_server/network_client.py` 实现 `set_relay/get_relay/set_all_relays/get_all_relays/toggle_relay/set_wifi`（Task 10.2-10.4）
-- [x] `mcp_server/server.py` 用 `FastMCP` 暴露 6 个工具并支持 `--mode/--port/--baudrate/--host/--http-port` 参数（Task 11.1-11.4）
+- [x] `mcp_server/server.py` 用 `MCPServer`（v2，`from mcp.server import MCPServer`）暴露 6 个工具并支持 `--mode/--port/--baudrate/--host/--http-port` 参数（Task 11.1-11.4）
 - [x] 工具注册验证通过：`app._tool_manager._tools` 列出 6 个工具（set_relay/get_relay/toggle_relay/set_all_relays/get_all_relays/set_wifi）；参数校验与异常路径经直接调用验证均符合预期（Task 11.5）
 - [x] `README.md` 含接线、烧录、CONTROL_SERIAL 说明、MCP 两种模式启动命令（Task 12）
 

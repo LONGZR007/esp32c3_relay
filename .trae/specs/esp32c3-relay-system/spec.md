@@ -22,7 +22,7 @@
 - 调整 `index.html`：
   - **UI 不动**（CSS / HTML 结构 / 视觉、卡片渲染、SVG 原理图全部保留）
   - 重写 `<script>` 内逻辑：状态初始化由 `GET /api/state` 取真实值，失败回退 localStorage；卡片点击 / 全局按钮 / 通道数变更均通过 HTTP API 同步
-- 新增 `requirements.txt`（MCP 服务器依赖：`pyserial`、`mcp`、`requests`）
+- 新增 `requirements.txt`（MCP 服务器依赖：`pyserial`、`mcp>=2`、`requests`）
 - 更新 `README.md` 给出接线、烧录、串口角色配置、MCP 启动说明
 
 ## Impact

@@ -1,10 +1,10 @@
 # ESP32-C3 8 路继电器 MCP 服务器
 import argparse
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 from serial_client import SerialClient
 from network_client import NetworkClient
 
-app = FastMCP("esp32c3-relay")
+app = MCPServer("esp32c3-relay")
 
 # 全局后端实例
 _backend = None
