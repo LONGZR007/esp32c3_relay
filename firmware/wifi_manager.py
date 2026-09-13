@@ -1,13 +1,14 @@
 # WiFi 连接管理模块
 # 无凭据启动 AP，有凭据连 STA，断线重连
-# GPIO8 作 WiFi 指示灯：连上点亮(高)，未连/断线熄灭(低)
+# GPIO8 作 WiFi 指示灯：低电平有效（连上时输出 0 点亮，未连/断线输出 1 熄灭）
 
 import time
 import machine
 import config
+import network
 
-# WiFi 指示灯：GPIO8，高电平点亮
-led = machine.Pin(8, machine.Pin.OUT, value=0)
+# WiFi 指示灯：GPIO8，低电平点亮
+led = machine.Pin(8, machine.Pin.OUT, value=1)  # 默认熄灭（高电平）
 
 
 def _start_ap():
@@ -31,17 +32,23 @@ def connect_loop():
     while True:
         try:
             # 每次尝试连接/重试前，指示灯熄灭（连上后再点亮）
-            led.value(0)
+            led.value(1)  # 低电平有效：输出 1 熄灭
             ssid, pwd = config.load_wifi()
             if ssid is None:
                 # 无凭据，启动 AP，等待用户配置
                 _start_ap()
                 time.sleep(30)
                 continue
-            import network
             sta = network.WLAN(network.STA_IF)
             if not sta.active():
                 sta.active(True)
+                # 尝试设置发射功率（单位 dBm）
+                # 如果固件支持，这行不会报错；如果不支持会抛出 KeyError/OSError
+                try:
+                    sta.config(txpower=15)
+                    print("TX功率已设置为 15dBm")
+                except Exception as e:
+                    print(f"config txpower 不支持: {e}")
                 time.sleep(0.5)
             try:
                 sta.connect(ssid, pwd)
@@ -72,7 +79,7 @@ def connect_loop():
                 except Exception:
                     pass
                 # WiFi 指示灯点亮
-                led.value(1)
+                led.value(0)  # 低电平有效：输出 0 点亮
                 # 监测循环，断线则回到外层重连
                 while True:
                     if not sta.isconnected():

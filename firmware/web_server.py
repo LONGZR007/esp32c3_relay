@@ -6,6 +6,7 @@
 import socket
 import json
 import select
+import time
 
 from relay import relays
 
@@ -138,7 +139,6 @@ def poll_server():
     # 由主循环周期调用：初始化监听 socket（首次），并处理当前已到达的连接。
     # select 非阻塞，无连接时立即返回，不会卡住主循环。
     global _listen, _listen_err_time
-    import time
     if _listen is None:
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
