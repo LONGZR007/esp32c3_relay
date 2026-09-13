@@ -14,6 +14,11 @@
             --text-main: #111827;
             --text-sub: #6b7280;
             --radius: 16px;
+            --focus-ring: #6366f1;
+            --error-color: #ef4444;
+            --loading-opacity: 0.5;
+            --toast-bg: #1f2937;
+            --toast-text: #f9fafb;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
@@ -29,7 +34,6 @@
             align-items: center;
         }
 
-        /* === 顶部配置栏 === */
         .header {
             width: 100%; max-width: 900px;
             margin-bottom: 24px;
@@ -51,7 +55,6 @@
         }
         .config-item input:focus { border-color: var(--no-color); }
 
-        /* === 全局控制按钮组 === */
         .global-controls { display: flex; gap: 8px; }
         .btn-global {
             padding: 8px 16px; border: none; border-radius: 10px;
@@ -60,10 +63,10 @@
             color: white;
         }
         .btn-global:active { transform: scale(0.96); }
+        .btn-global:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-all-no { background: var(--no-color); }
         .btn-all-nc { background: var(--nc-color); }
 
-        /* === 继电器网格 === */
         .grid {
             width: 100%; max-width: 900px;
             display: grid;
@@ -75,15 +78,25 @@
             background: var(--card-bg); border-radius: var(--radius);
             padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.2s;
             cursor: pointer;
+            contain: layout style paint;
+            position: relative;
         }
         .relay-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
         .relay-card:active { transform: scale(0.98); }
 
+        .relay-card.is-loading {
+            opacity: var(--loading-opacity);
+            pointer-events: none;
+        }
+        .relay-card:focus-visible {
+            outline: 3px solid var(--focus-ring);
+            outline-offset: 2px;
+        }
+
         .ch-label { font-size: 0.8rem; font-weight: 700; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.06em; }
 
-        /* === SVG 原理图样式核心 === */
         .schematic-svg { width: 140px; height: 90px; overflow: visible; }
         
         .wire { stroke: var(--wire-inactive); stroke-width: 2.5; stroke-linecap: round; fill: none; transition: stroke 0.2s; }
@@ -91,12 +104,8 @@
         .node-label { font-size: 11px; font-weight: 800; fill: var(--text-sub); font-family: monospace; transition: fill 0.2s; }
         
         .wire-nc-dashed { 
-            stroke: var(--nc-color); 
-            stroke-width: 2.5;       
-            stroke-dasharray: 5 3;   
-            stroke-linecap: round;
-            opacity: 0.35;           
-            fill: none;
+            stroke: var(--nc-color); stroke-width: 2.5; stroke-dasharray: 5 3;   
+            stroke-linecap: round; opacity: 0.35; fill: none;
             transition: opacity 0.2s, stroke 0.2s;
         }
 
@@ -105,7 +114,6 @@
             transition: d 0.3s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.2s; 
         }
 
-        /* === 状态激活映射 === */
         .relay-card.mode-no .wire-no { stroke: var(--no-color); }
         .relay-card.mode-no .node-no { fill: var(--no-color); }
         .relay-card.mode-no .arm { stroke: var(--no-color); }
@@ -127,6 +135,30 @@
             text-align: center; max-width: 600px; line-height: 1.6;
         }
 
+        /* Toast */
+        .toast-container {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; display: flex; flex-direction: column; gap: 8px; align-items: center;
+            pointer-events: none;
+        }
+        .toast {
+            background: var(--toast-bg); color: var(--toast-text);
+            padding: 10px 20px; border-radius: 10px; font-size: 0.8rem; font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            opacity: 0; transform: translateY(10px);
+            animation: toastIn 0.3s ease forwards;
+            pointer-events: auto;
+        }
+        .toast.toast-error { background: var(--error-color); }
+        .toast.toast-out { animation: toastOut 0.3s ease forwards; }
+        @keyframes toastIn { to { opacity: 1; transform: translateY(0); } }
+        @keyframes toastOut { to { opacity: 0; transform: translateY(-10px); } }
+
+        .sr-only {
+            position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+            overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+        }
+
         @media (max-width: 480px) {
             body { padding: 16px; }
             h1 { font-size: 1.2rem; }
@@ -144,13 +176,11 @@
 
 <div class="header">
     <h1>⚡ 继电器原理图控制面板</h1>
-    
     <div class="config-group">
         <div class="config-item">
             <label for="channelCount">通道数</label>
             <input type="number" id="channelCount" min="1" max="32" value="8">
         </div>
-        
         <div class="global-controls">
             <button class="btn-global btn-all-no" id="btnAllNO" title="全部吸合">全部 NO</button>
             <button class="btn-global btn-all-nc" id="btnAllNC" title="全部释放">全部 NC</button>
@@ -159,6 +189,9 @@
 </div>
 
 <div class="grid" id="grid"></div>
+
+<div class="toast-container" id="toastContainer"></div>
+<div class="sr-only" aria-live="polite" id="a11yAnnouncer"></div>
 
 <div class="footer-note">
     ⚠️ 安全提示：图中 NC-COM 间的虚线表示继电器未通电时的机械默认连通状态。<br>
@@ -169,39 +202,15 @@
 (function() {
     'use strict';
 
-    const KEY_CHANNELS = 'relay_sch_channels';
-    const KEY_STATES   = 'relay_sch_states';
-
-    const gridEl     = document.getElementById('grid');
-    const countInput = document.getElementById('channelCount');
-    const btnAllNO   = document.getElementById('btnAllNO');
-    const btnAllNC   = document.getElementById('btnAllNC');
-
-    function loadNum(key, def, min, max) {
-        const v = parseInt(localStorage.getItem(key), 10);
-        return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : def;
-    }
-
-    let channelCount = loadNum(KEY_CHANNELS, 8, 1, 32);
-
-    let states;
-    try {
-        const raw = JSON.parse(localStorage.getItem(KEY_STATES));
-        states = Array.isArray(raw) ? raw : [];
-    } catch(e) { states = []; }
-
-    function syncStates() {
-        if (states.length < channelCount) {
-            states = [...states, ...new Array(channelCount - states.length).fill(false)];
-        } else if (states.length > channelCount) {
-            states = states.slice(0, channelCount);
-        }
-        localStorage.setItem(KEY_STATES, JSON.stringify(states));
-    }
-
-    function getSchematicSVG() {
-        return `
-        <svg class="schematic-svg" viewBox="0 0 140 90">
+    // ========== 配置常量 ==========
+    const CONFIG = {
+        KEY_CHANNELS: 'relay_sch_channels_v2',
+        KEY_STATES: 'relay_sch_states_v2',
+        API_TIMEOUT_MS: 5000,
+        ARM_PATHS: { NO: 'M100,45 L65,70', NC: 'M100,45 L65,20' },
+        DESC_TEXT: { NO: 'NO 导通 (吸合)', NC: 'NC 导通 (默认)' },
+        // ✅ 修复：SVG 作为模板字符串常量，兼容所有嵌入式服务器
+        SVG_TEMPLATE: `<svg class="schematic-svg" viewBox="0 0 140 90">
             <line class="wire wire-nc" x1="20" y1="20" x2="65" y2="20"/>
             <circle class="dot" cx="65" cy="20" r="3.5"/>
             <text class="node-label node-nc" x="8" y="24">NC</text>
@@ -213,129 +222,249 @@
             <circle class="dot dot-com" cx="100" cy="45" r="4"/>
             <text class="node-label" x="112" y="38">COM</text>
             <path class="arm" d="M100,45 L65,20"/>
-        </svg>`;
+        </svg>`
+    };
+
+    // ========== DOM 引用 ==========
+    const gridEl         = document.getElementById('grid');
+    const countInput     = document.getElementById('channelCount');
+    const btnAllNO       = document.getElementById('btnAllNO');
+    const btnAllNC       = document.getElementById('btnAllNC');
+    const toastContainer = document.getElementById('toastContainer');
+    const announcer      = document.getElementById('a11yAnnouncer');
+
+    // ========== 工具函数 ==========
+    function loadNum(key, def, min, max) {
+        const v = parseInt(localStorage.getItem(key), 10);
+        return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : def;
     }
 
-    function render() {
+    async function fetchWithTimeout(url, options, timeoutMs = CONFIG.API_TIMEOUT_MS) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const resp = await fetch(url, { ...options, signal: controller.signal });
+            clearTimeout(timer);
+            return resp;
+        } catch (e) {
+            clearTimeout(timer);
+            throw e;
+        }
+    }
+
+    function showToast(message, type = 'info', duration = 3000) {
+        const el = document.createElement('div');
+        el.className = `toast ${type === 'error' ? 'toast-error' : ''}`;
+        el.textContent = message;
+        toastContainer.appendChild(el);
+        setTimeout(() => {
+            el.classList.add('toast-out');
+            el.addEventListener('animationend', () => el.remove());
+        }, duration);
+    }
+
+    function announce(text) {
+        announcer.textContent = '';
+        requestAnimationFrame(() => { announcer.textContent = text; });
+    }
+
+    // ========== 状态管理 ==========
+    let channelCount = loadNum(CONFIG.KEY_CHANNELS, 8, 1, 32);
+    let states = [];
+    const busySet = new Set();
+
+    try {
+        const raw = JSON.parse(localStorage.getItem(CONFIG.KEY_STATES));
+        states = Array.isArray(raw) ? raw : [];
+    } catch(e) { states = []; }
+
+    function syncStates() {
+        if (states.length < channelCount) {
+            states = [...states, ...new Array(channelCount - states.length).fill(false)];
+        } else if (states.length > channelCount) {
+            states = states.slice(0, channelCount);
+        }
+        localStorage.setItem(CONFIG.KEY_STATES, JSON.stringify(states));
+    }
+
+    // ========== ✅ 局部更新 ==========
+    function updateCard(index) {
+        const card = gridEl.children[index];
+        if (!card) return;
+        const isNO = states[index];
+        const mode = isNO ? 'NO' : 'NC';
+
+        card.className = `relay-card mode-${mode.toLowerCase()}`;
+        card.setAttribute('aria-checked', String(isNO));
+        card.setAttribute('aria-label', `通道 ${index + 1} 继电器，当前${CONFIG.DESC_TEXT[mode]}`);
+        card.querySelector('.arm').setAttribute('d', CONFIG.ARM_PATHS[mode]);
+        card.querySelector('.status-desc').textContent = CONFIG.DESC_TEXT[mode];
+    }
+
+    function setLoading(index, loading) {
+        const card = gridEl.children[index];
+        if (!card) return;
+        if (loading) {
+            card.classList.add('is-loading');
+            busySet.add(index);
+        } else {
+            card.classList.remove('is-loading');
+            busySet.delete(index);
+        }
+    }
+
+    // ========== ✅ 全量构建（使用内联 SVG 模板） ==========
+    function buildGrid() {
         syncStates();
         countInput.value = channelCount;
         gridEl.innerHTML = '';
 
+        const fragment = document.createDocumentFragment();
         for (let i = 0; i < channelCount; i++) {
             const isNO = states[i];
-            const modeClass = isNO ? 'mode-no' : 'mode-nc';
-            const descText  = isNO ? 'NO 导通 (吸合)' : 'NC 导通 (默认)';
-            const armPath   = isNO ? 'M100,45 L65,70' : 'M100,45 L65,20';
+            const mode = isNO ? 'NO' : 'NC';
 
             const card = document.createElement('div');
-            card.className = `relay-card ${modeClass}`;
+            card.className = `relay-card mode-${mode.toLowerCase()}`;
             card.setAttribute('role', 'switch');
             card.setAttribute('aria-checked', String(isNO));
+            card.setAttribute('aria-label', `通道 ${i + 1} 继电器，当前${CONFIG.DESC_TEXT[mode]}`);
             card.setAttribute('tabindex', '0');
             card.dataset.ch = i;
 
+            // ✅ 直接使用模板字符串，100% 兼容
             card.innerHTML = `
                 <span class="ch-label">通道 ${i + 1}</span>
-                ${getSchematicSVG()}
-                <span class="status-desc">${descText}</span>
+                ${CONFIG.SVG_TEMPLATE}
+                <span class="status-desc">${CONFIG.DESC_TEXT[mode]}</span>
             `;
-
-            card.querySelector('.arm').setAttribute('d', armPath);
-
-            // ✅ 修改：确认式更新 —— 只有后端成功后才改变界面
-            const toggle = async () => {
-                const targetState = !states[i];
-                try {
-                    const resp = await fetch('/api/relay', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ch: i + 1, state: targetState ? 1 : 0})
-                    });
-                    
-                    if (resp.ok) {
-                        const data = await resp.json();
-                        if (Array.isArray(data.channels)) {
-                            // 后端确认成功，用权威数据更新本地状态
-                            states = data.channels.map(v => v ? true : false);
-                            localStorage.setItem(KEY_STATES, JSON.stringify(states));
-                            render();
-                            console.log(`[Relay] CH${i+1} -> ${targetState ? 'NO' : 'NC'} (confirmed)`);
-                        }
-                    } else {
-                        // 后端拒绝：界面不动，仅打印警告
-                        console.warn(`[Relay] CH${i+1} 切换被拒绝 HTTP ${resp.status}`);
-                    }
-                } catch (e) {
-                    // 网络异常：界面不动，仅打印错误
-                    console.error(`[Relay] CH${i+1} 网络异常，状态未变更:`, e);
-                }
-            };
-
-            card.addEventListener('click', toggle);
-            card.addEventListener('keydown', e => {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
-            });
-
-            gridEl.appendChild(card);
+            card.querySelector('.arm').setAttribute('d', CONFIG.ARM_PATHS[mode]);
+            fragment.appendChild(card);
         }
+        gridEl.appendChild(fragment);
     }
 
-    // ✅ 修改：全局控制也改为确认式更新
-    async function setAllChannels(targetState) {
-        try {
-            const resp = await fetch('/api/relay/all', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({state: targetState ? 1 : 0})
-            });
-            
+    // ========== 事件委托 ==========
+    function handleCardInteraction(index) {
+        if (busySet.has(index)) return;
+
+        const targetState = !states[index];
+        setLoading(index, true);
+
+        fetchWithTimeout('/api/relay', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ch: index + 1, state: targetState ? 1 : 0 })
+        })
+        .then(async (resp) => {
             if (resp.ok) {
                 const data = await resp.json();
                 if (Array.isArray(data.channels)) {
-                    // 后端确认成功，用权威数据更新本地状态
-                    states = data.channels.map(v => v ? true : false);
-                    localStorage.setItem(KEY_STATES, JSON.stringify(states));
-                    render();
-                    console.log(`[Relay] Global -> All ${targetState ? 'NO' : 'NC'} (confirmed)`);
+                    const safeChannels = data.channels.slice(0, channelCount);
+                    while (safeChannels.length < channelCount) safeChannels.push(false);
+                    states = safeChannels.map(v => !!v);
+                    localStorage.setItem(CONFIG.KEY_STATES, JSON.stringify(states));
+                    updateCard(index);
+                    announce(`通道 ${index + 1} 已切换为 ${targetState ? 'NO' : 'NC'}`);
                 }
             } else {
-                console.error(`[Relay] 全局切换被拒绝 HTTP ${resp.status}`);
+                showToast(`通道 ${index + 1} 操作被拒绝 (${resp.status})`, 'error');
+            }
+        })
+        .catch((e) => {
+            const msg = e.name === 'AbortError' ? '请求超时' : '网络异常';
+            showToast(`通道 ${index + 1} ${msg}`, 'error');
+            console.error(`[Relay] CH${index + 1} 失败:`, e);
+        })
+        .finally(() => {
+            setLoading(index, false);
+        });
+    }
+
+    gridEl.addEventListener('click', (e) => {
+        const card = e.target.closest('.relay-card');
+        if (card && gridEl.contains(card)) {
+            handleCardInteraction(parseInt(card.dataset.ch, 10));
+        }
+    });
+
+    gridEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            const card = e.target.closest('.relay-card');
+            if (card && gridEl.contains(card)) {
+                e.preventDefault();
+                handleCardInteraction(parseInt(card.dataset.ch, 10));
+            }
+        }
+    });
+
+    // ========== 全局控制 ==========
+    let globalBusy = false;
+    async function setAllChannels(targetState) {
+        if (globalBusy) return;
+        globalBusy = true;
+        btnAllNO.disabled = btnAllNC.disabled = true;
+
+        try {
+            const resp = await fetchWithTimeout('/api/relay/all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state: targetState ? 1 : 0 })
+            });
+
+            if (resp.ok) {
+                const data = await resp.json();
+                if (Array.isArray(data.channels)) {
+                    const safeChannels = data.channels.slice(0, channelCount);
+                    while (safeChannels.length < channelCount) safeChannels.push(false);
+                    states = safeChannels.map(v => !!v);
+                    localStorage.setItem(CONFIG.KEY_STATES, JSON.stringify(states));
+                    for (let i = 0; i < channelCount; i++) updateCard(i);
+                    announce(`所有通道已切换为 ${targetState ? 'NO' : 'NC'}`);
+                }
+            } else {
+                showToast(`全局操作被拒绝 (${resp.status})`, 'error');
             }
         } catch (e) {
-            // 网络异常：界面不动
-            console.error(`[Relay] 全局切换网络异常，状态未变更:`, e);
+            const msg = e.name === 'AbortError' ? '请求超时' : '网络异常';
+            showToast(`全局操作${msg}`, 'error');
+        } finally {
+            globalBusy = false;
+            btnAllNO.disabled = btnAllNC.disabled = false;
         }
     }
 
     btnAllNO.addEventListener('click', () => setAllChannels(true));
     btnAllNC.addEventListener('click', () => setAllChannels(false));
 
+    // ========== 通道数变更 ==========
     countInput.addEventListener('change', () => {
         let val = parseInt(countInput.value, 10);
         if (!Number.isFinite(val)) val = 8;
         channelCount = Math.min(32, Math.max(1, val));
-        localStorage.setItem(KEY_CHANNELS, String(channelCount));
-        render();
+        localStorage.setItem(CONFIG.KEY_CHANNELS, String(channelCount));
+        buildGrid();
     });
 
-    // 启动时从后端拉取真实状态
-    (async function initFromBackend() {
+    // ========== 初始化 ==========
+    (async function init() {
+        buildGrid();
         try {
-            const resp = await fetch('/api/state');
+            const resp = await fetchWithTimeout('/api/state');
             if (resp.ok) {
                 const data = await resp.json();
                 if (Array.isArray(data.channels)) {
-                    states = data.channels.map(v => v ? true : false);
-                    localStorage.setItem(KEY_STATES, JSON.stringify(states));
-                    render();
+                    const safeChannels = data.channels.slice(0, channelCount);
+                    while (safeChannels.length < channelCount) safeChannels.push(false);
+                    states = safeChannels.map(v => !!v);
+                    localStorage.setItem(CONFIG.KEY_STATES, JSON.stringify(states));
+                    for (let i = 0; i < channelCount; i++) updateCard(i);
                     return;
                 }
             }
-            console.warn('[Relay] 无法获取后端状态，使用本地缓存');
-            render();
+            showToast('无法同步后端状态，使用本地缓存', 'error');
         } catch (e) {
-            console.warn('[Relay] 网络不可达，使用本地缓存', e);
-            render();
+            showToast('设备离线，使用本地缓存', 'error');
         }
     })();
 })();
