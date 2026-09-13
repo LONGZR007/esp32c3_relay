@@ -151,7 +151,6 @@
             <input type="number" id="channelCount" min="1" max="32" value="8">
         </div>
         
-        <!-- ⭐ 新增全局控制按钮 -->
         <div class="global-controls">
             <button class="btn-global btn-all-no" id="btnAllNO" title="全部吸合">全部 NO</button>
             <button class="btn-global btn-all-nc" id="btnAllNC" title="全部释放">全部 NC</button>
@@ -243,41 +242,32 @@
 
             card.querySelector('.arm').setAttribute('d', armPath);
 
-            // 单通道切换：本地乐观更新 + 后端同步
+            // ✅ 修改：确认式更新 —— 只有后端成功后才改变界面
             const toggle = async () => {
-                const prev = states[i];
-                // 本地乐观更新
-                states[i] = !states[i];
-                render();
+                const targetState = !states[i];
                 try {
                     const resp = await fetch('/api/relay', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ch: i + 1, state: states[i] ? 1 : 0})
+                        body: JSON.stringify({ch: i + 1, state: targetState ? 1 : 0})
                     });
+                    
                     if (resp.ok) {
                         const data = await resp.json();
                         if (Array.isArray(data.channels)) {
-                            // 用后端权威数据重新同步
+                            // 后端确认成功，用权威数据更新本地状态
                             states = data.channels.map(v => v ? true : false);
                             localStorage.setItem(KEY_STATES, JSON.stringify(states));
                             render();
+                            console.log(`[Relay] CH${i+1} -> ${targetState ? 'NO' : 'NC'} (confirmed)`);
                         }
-                        console.log(`[Relay] CH${i+1} -> ${states[i] ? 'NO' : 'NC'}`);
-                    } else if (resp.status === 400) {
-                        // 通道超出硬件范围（ESP32-C3 仅 8 路），保持本地乐观状态
-                        console.warn(`[Relay] CH${i+1} 超出硬件范围 (ESP32-C3 仅 8 路)`);
                     } else {
-                        // 其他错误：回滚到旧状态
-                        states[i] = prev;
-                        render();
-                        console.error(`[Relay] CH${i+1} 切换失败 HTTP ${resp.status}`);
+                        // 后端拒绝：界面不动，仅打印警告
+                        console.warn(`[Relay] CH${i+1} 切换被拒绝 HTTP ${resp.status}`);
                     }
                 } catch (e) {
-                    // 网络错误：回滚到旧状态
-                    states[i] = prev;
-                    render();
-                    console.error(`[Relay] CH${i+1} 网络错误:`, e);
+                    // 网络异常：界面不动，仅打印错误
+                    console.error(`[Relay] CH${i+1} 网络异常，状态未变更:`, e);
                 }
             };
 
@@ -290,33 +280,30 @@
         }
     }
 
-    // 全局控制：本地乐观更新 + 后端同步
+    // ✅ 修改：全局控制也改为确认式更新
     async function setAllChannels(targetState) {
-        // 本地乐观更新
-        states = new Array(channelCount).fill(targetState);
-        render();
         try {
             const resp = await fetch('/api/relay/all', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({state: targetState ? 1 : 0})
             });
+            
             if (resp.ok) {
                 const data = await resp.json();
                 if (Array.isArray(data.channels)) {
-                    // 用后端权威数据重新同步
+                    // 后端确认成功，用权威数据更新本地状态
                     states = data.channels.map(v => v ? true : false);
                     localStorage.setItem(KEY_STATES, JSON.stringify(states));
                     render();
+                    console.log(`[Relay] Global -> All ${targetState ? 'NO' : 'NC'} (confirmed)`);
                 }
-                console.log(`[Relay] Global -> All ${targetState ? 'NO' : 'NC'}`);
             } else {
-                // 失败：保持本地乐观状态
-                console.error(`[Relay] 全局切换失败 HTTP ${resp.status}`);
+                console.error(`[Relay] 全局切换被拒绝 HTTP ${resp.status}`);
             }
         } catch (e) {
-            // 网络错误：保持本地乐观状态
-            console.error(`[Relay] 全局切换网络错误:`, e);
+            // 网络异常：界面不动
+            console.error(`[Relay] 全局切换网络异常，状态未变更:`, e);
         }
     }
 
@@ -331,26 +318,23 @@
         render();
     });
 
-    // 启动时从后端拉取状态，失败回退到本地缓存
+    // 启动时从后端拉取真实状态
     (async function initFromBackend() {
         try {
             const resp = await fetch('/api/state');
             if (resp.ok) {
                 const data = await resp.json();
                 if (Array.isArray(data.channels)) {
-                    // 用后端返回的 channels 数组覆盖本地 states
                     states = data.channels.map(v => v ? true : false);
                     localStorage.setItem(KEY_STATES, JSON.stringify(states));
                     render();
                     return;
                 }
             }
-            // 响应异常：进入离线模式
-            console.warn('[Relay] 离线模式：使用本地缓存状态');
+            console.warn('[Relay] 无法获取后端状态，使用本地缓存');
             render();
         } catch (e) {
-            // 网络错误：进入离线模式
-            console.warn('[Relay] 离线模式：使用本地缓存状态', e);
+            console.warn('[Relay] 网络不可达，使用本地缓存', e);
             render();
         }
     })();
